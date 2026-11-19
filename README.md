@@ -151,11 +151,33 @@ Response: `201 { "ok": true, "id": "..." }`. Messages are validated server-side 
 
 ## Deploying the frontend on Vercel
 
-Import the repository into Vercel as a normal Vite project (framework preset: Vite, build command `npm run build`, output `dist`). Vercel automatically ignores the `server/` folder. No environment variables are needed on the frontend today.
+Import the repository into Vercel as a normal Vite project (framework preset: Vite, build command `npm run build`, output `dist`). Vercel automatically ignores the `server/` folder.
 
-## Connecting the frontend to the backend later
+Add this environment variable under **Settings → Environment Variables** (Production, Preview and Development):
 
-The calculators still work in the browser, so no wiring is required right now. When you want the site to use the API (for example, to log contact submissions), set a variable like `VITE_API_URL=https://your-api.onrender.com` in Vercel and call the endpoints listed above — the backend already accepts your Vercel domain through CORS.
+| Variable | Value |
+| --- | --- |
+| `VITE_API_BASE_URL` | `https://nutrismartai-backend.onrender.com` |
+
+Vite only exposes variables that start with `VITE_`, and the backend URL is public information, so it is safe to ship in the frontend. Supabase secret keys (the service role key) are used only by the backend on Render and are never placed in frontend code or Vercel.
+
+Without `VITE_API_BASE_URL` the site still works: the BMI and calorie calculators and the diet planner fall back to built-in browser logic, and the contact form shows a friendly message instead of saving to the database. Setting the variable switches all of these features to the live backend.
+
+## Connecting the frontend to the backend
+
+The frontend is already wired to the backend through `src/utils/apiClient.ts`, which reads `VITE_API_BASE_URL` and calls these endpoints:
+
+- `POST /api/bmi` — BMI calculator
+- `POST /api/calories` — daily calorie calculator
+- `GET /api/meal-plan?goal=...` — vegetarian Indian diet planner
+- `POST /api/contact` — contact form
+
+After deploying both apps, make sure the two sides agree on origins:
+
+1. In Vercel: `VITE_API_BASE_URL` = your Render URL (no trailing slash needed).
+2. In Render: `CORS_ORIGIN` includes your Vercel URL, e.g. `https://nutrismart-ai.vercel.app`. Any `*.vercel.app` preview domain is accepted automatically.
+
+Changing either variable requires a redeploy of that side to take effect.
 
 ---
 
