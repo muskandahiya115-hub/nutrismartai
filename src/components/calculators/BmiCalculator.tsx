@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { RotateCcw, Scale } from 'lucide-react';
+import { Loader2, RotateCcw, Scale } from 'lucide-react';
 import NumberField from '@/components/calculators/NumberField';
+import { apiConfigured, apiPost, ApiRequestError } from '@/utils/apiClient';
 import { calculateBmi, getBmiCategory, type BmiTone } from '@/utils/nutrition';
 
 interface BmiResult {
@@ -43,8 +44,10 @@ export default function BmiCalculator() {
   const [weight, setWeight] = useState('');
   const [errors, setErrors] = useState<{ height?: string; weight?: string }>({});
   const [result, setResult] = useState<BmiResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const heightCm = Number(height);
     const weightKg = Number(weight);
@@ -54,6 +57,36 @@ export default function BmiCalculator() {
     if (Object.keys(validation).length > 0) {
       setResult(null);
       return;
+    }
+
+    if (apiConfigured) {
+      setIsSubmitting(true);
+      setApiError('');
+      try {
+        const data = await apiPost<{
+          bmi: number;
+          category: string;
+          tone: BmiTone;
+          healthyWeightRangeKg: { min: number; max: number };
+        }>('/bmi', { heightCm, weightKg });
+        setResult({
+          bmi: data.bmi,
+          label: data.category,
+          tone: data.tone,
+          idealMin: data.healthyWeightRangeKg.min,
+          idealMax: data.healthyWeightRangeKg.max,
+          weight: weightKg,
+        });
+        return;
+      } catch (error) {
+        setApiError(
+          error instanceof ApiRequestError && error.status !== 0
+            ? error.message
+            : 'Could not reach the server. Showing the offline result instead.'
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
     }
 
     const bmi = calculateBmi(heightCm, weightKg);
@@ -73,6 +106,7 @@ export default function BmiCalculator() {
     setHeight('');
     setWeight('');
     setErrors({});
+    setApiError('');
     setResult(null);
   };
 
@@ -106,15 +140,17 @@ export default function BmiCalculator() {
         />
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <button type="submit" className="btn-primary flex-1">
-            <Scale className="h-4 w-4" />
-            Calculate BMI
+          <button type="submit" disabled={isSubmitting} className="btn-primary flex-1">
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scale className="h-4 w-4" />}
+            {isSubmitting ? 'Calculating…' : 'Calculate BMI'}
           </button>
           <button type="button" onClick={handleReset} className="btn-outline">
             <RotateCcw className="h-4 w-4" />
             Reset
           </button>
         </div>
+
+        {apiError && <p className="text-sm text-amber-700">{apiError}</p>}
       </form>
 
       <div className="flex flex-col justify-center rounded-3xl bg-gradient-to-br from-primary-50 to-cream-200 p-6 sm:p-8">

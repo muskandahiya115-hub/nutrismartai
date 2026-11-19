@@ -1,7 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { CheckCircle2, Mail, MapPin, Phone, Send } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Mail, MapPin, Phone, Send } from 'lucide-react';
 import Reveal from '@/components/common/Reveal';
 import SectionHeading from '@/components/common/SectionHeading';
+import { apiConfigured, apiPost, ApiRequestError } from '@/utils/apiClient';
 
 interface ContactForm {
   name: string;
@@ -36,6 +37,8 @@ const inputClass = 'input-base';
 export default function Contact() {
   const [form, setForm] = useState<ContactForm>(emptyForm);
   const [errors, setErrors] = useState<ContactErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const updateField = (field: keyof ContactForm) => (value: string) => {
@@ -43,16 +46,42 @@ export default function Contact() {
     setErrors((current) => ({ ...current, [field]: undefined }));
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const validation = validate(form);
     setErrors(validation);
-    if (Object.keys(validation).length === 0) setIsSubmitted(true);
+    setFormError('');
+    if (Object.keys(validation).length > 0) return;
+
+    if (!apiConfigured) {
+      setIsSubmitted(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await apiPost('/contact', {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        topic: form.topic,
+        message: form.message.trim(),
+      });
+      setIsSubmitted(true);
+    } catch (error) {
+      setFormError(
+        error instanceof ApiRequestError
+          ? error.message
+          : 'Something went wrong while sending your message. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
     setForm(emptyForm);
     setErrors({});
+    setFormError('');
     setIsSubmitted(false);
   };
 
@@ -154,9 +183,16 @@ export default function Contact() {
                     />
                   </Field>
 
-                  <button type="submit" className="btn-primary w-full sm:w-auto">
-                    <Send className="h-4 w-4" />
-                    Send message
+                  {formError && (
+                    <p className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      {formError}
+                    </p>
+                  )}
+
+                  <button type="submit" disabled={isSubmitting} className="btn-primary w-full sm:w-auto">
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    {isSubmitting ? 'Sending…' : 'Send message'}
                   </button>
                 </form>
               )}

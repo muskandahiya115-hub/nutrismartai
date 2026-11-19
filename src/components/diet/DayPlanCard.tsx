@@ -1,4 +1,4 @@
-import { Flame, Leaf, RefreshCw } from 'lucide-react';
+import { Flame, Leaf, Loader2, RefreshCw } from 'lucide-react';
 import { mealOrder, sumDayPlan, type DayPlan } from '@/utils/mealPlanner';
 import { mealTypes, type MealType } from '@/data/meals';
 
@@ -6,9 +6,11 @@ interface DayPlanCardProps {
   plan: DayPlan;
   onShuffle: (type: MealType) => void;
   onRegenerate: () => void;
+  isRefreshing?: boolean;
+  apiError?: string;
 }
 
-export default function DayPlanCard({ plan, onShuffle, onRegenerate }: DayPlanCardProps) {
+export default function DayPlanCard({ plan, onShuffle, onRegenerate, isRefreshing = false, apiError = '' }: DayPlanCardProps) {
   const totals = sumDayPlan(plan);
   const labelFor = (type: MealType) => mealTypes.find((item) => item.value === type)?.label ?? type;
 
@@ -19,11 +21,13 @@ export default function DayPlanCard({ plan, onShuffle, onRegenerate }: DayPlanCa
           <h3 className="text-2xl font-bold">Your vegetarian day</h3>
           <p className="mt-1 text-sm text-stone-500">Swap any meal, or build a fresh day.</p>
         </div>
-        <button type="button" onClick={onRegenerate} className="btn-outline !px-4 !py-2.5">
-          <RefreshCw className="h-4 w-4" />
-          <span className="hidden sm:inline">New day</span>
+        <button type="button" onClick={onRegenerate} disabled={isRefreshing} className="btn-outline !px-4 !py-2.5">
+          {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          <span className="hidden sm:inline">{isRefreshing ? 'Loading…' : 'New day'}</span>
         </button>
       </div>
+
+      {apiError && <p className="mt-4 text-sm text-amber-700">{apiError}</p>}
 
       <ol className="mt-6 space-y-3">
         {mealOrder.map((type) => {

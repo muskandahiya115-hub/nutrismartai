@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Flame, RotateCcw } from 'lucide-react';
+import { Flame, Loader2, RotateCcw } from 'lucide-react';
 import NumberField from '@/components/calculators/NumberField';
+import { apiConfigured, apiPost, ApiRequestError } from '@/utils/apiClient';
 import {
   activityLevels,
   calorieGoals,
@@ -51,12 +52,14 @@ export default function CalorieCalculator() {
   const [goal, setGoal] = useState<CalorieGoal>('maintain');
   const [errors, setErrors] = useState<CalorieErrors>({});
   const [result, setResult] = useState<CalorieResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const updateInput = (field: keyof CalorieInputs) => (value: string) => {
     setInputs((current) => ({ ...current, [field]: value }));
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const validation = validate(inputs);
     setErrors(validation);
@@ -66,7 +69,36 @@ export default function CalorieCalculator() {
       return;
     }
 
-    const bmr = calculateBmr(gender, Number(inputs.age), Number(inputs.height), Number(inputs.weight));
+    const age = Number(inputs.age);
+    const heightCm = Number(inputs.height);
+    const weightKg = Number(inputs.weight);
+
+    if (apiConfigured) {
+      setIsSubmitting(true);
+      setApiError('');
+      try {
+        const data = await apiPost<{ bmr: number; maintenance: number }>('/calories', {
+          age,
+          gender,
+          heightCm,
+          weightKg,
+          activityLevel: activity,
+          goal: 'maintain',
+        });
+        setResult({ bmr: data.bmr, maintenance: data.maintenance, gender });
+        return;
+      } catch (error) {
+        setApiError(
+          error instanceof ApiRequestError && error.status !== 0
+            ? error.message
+            : 'Could not reach the server. Showing the offline result instead.'
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+
+    const bmr = calculateBmr(gender, age, heightCm, weightKg);
     setResult({ bmr, maintenance: bmr * getActivityFactor(activity), gender });
   };
 
@@ -76,6 +108,7 @@ export default function CalorieCalculator() {
     setActivity('moderate');
     setGoal('maintain');
     setErrors({});
+    setApiError('');
     setResult(null);
   };
 
@@ -162,15 +195,17 @@ export default function CalorieCalculator() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <button type="submit" className="btn-primary flex-1">
-            <Flame className="h-4 w-4" />
-            Calculate calories
+          <button type="submit" disabled={isSubmitting} className="btn-primary flex-1">
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flame className="h-4 w-4" />}
+            {isSubmitting ? 'Calculating…' : 'Calculate calories'}
           </button>
           <button type="button" onClick={handleReset} className="btn-outline">
             <RotateCcw className="h-4 w-4" />
             Reset
           </button>
         </div>
+
+        {apiError && <p className="text-sm text-amber-700">{apiError}</p>}
       </form>
 
       <div className="flex flex-col justify-center rounded-3xl bg-gradient-to-br from-primary-50 to-cream-200 p-6 sm:p-8">

@@ -4,21 +4,76 @@ import DayPlanCard from '@/components/diet/DayPlanCard';
 import MealLibrary from '@/components/diet/MealLibrary';
 import Reveal from '@/components/common/Reveal';
 import SectionHeading from '@/components/common/SectionHeading';
+import { apiConfigured, apiGet, ApiRequestError } from '@/utils/apiClient';
 import { dietGoals, meals, type DietGoal, type Meal, type MealType } from '@/data/meals';
 import { buildDayPlan, pickRandomMeal, type DayPlan } from '@/utils/mealPlanner';
+
+interface ApiMeal {
+  id: string;
+  name: string;
+  type: MealType;
+  description: string;
+  calories: number;
+  protein: number;
+}
+
+function toPlan(entries: { type: MealType; meal: ApiMeal | null }[]): DayPlan {
+  const result: DayPlan = {};
+  for (const entry of entries) {
+    if (entry.meal) result[entry.type] = entry.meal as Meal;
+  }
+  return result;
+}
 
 export default function DietPlanner() {
   const [goal, setGoal] = useState<DietGoal>('balanced');
   const [plan, setPlan] = useState<DayPlan>(() => buildDayPlan('balanced'));
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [apiError, setApiError] = useState('');
 
-  const selectGoal = (nextGoal: DietGoal) => {
+  const selectGoal = async (nextGoal: DietGoal) => {
     setGoal(nextGoal);
-    setPlan(buildDayPlan(nextGoal));
+    if (!apiConfigured) {
+      setPlan(buildDayPlan(nextGoal));
+      return;
+    }
+    setIsRefreshing(true);
+    setApiError('');
+    try {
+      const data = await apiGet<{ plan: { type: MealType; meal: ApiMeal | null }[] }>(
+        `/meal-plan?goal=${encodeURIComponent(nextGoal)}`
+      );
+      setPlan(toPlan(data.plan));
+    } catch {
+      setPlan(buildDayPlan(nextGoal));
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const shuffleMeal = (type: MealType) => {
-    const meal = pickRandomMeal(type, goal, plan[type]?.id);
-    if (meal) setPlan((current) => ({ ...current, [type]: meal }));
+  const shuffleMeal = async (type: MealType) => {
+    if (!apiConfigured) {
+      const meal = pickRandomMeal(type, goal, plan[type]?.id);
+      if (meal) setPlan((current) => ({ ...current, [type]: meal }));
+      return;
+    }
+    setIsRefreshing(true);
+    try {
+      const data = await apiGet<{ plan: { type: MealType; meal: ApiMeal | null }[] }>(
+        `/meal-plan?goal=${encodeURIComponent(goal)}`
+      );
+      const entry = data.plan.find((item) => item.type === type);
+      if (entry?.meal) setPlan((current) => ({ ...current, [type]: entry.meal as Meal }));
+      setApiError('');
+    } catch (error) {
+      setApiError(
+        error instanceof ApiRequestError && error.status !== 0
+          ? error.message
+          : 'Could not reach the server. Using offline meal ideas.'
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const addToPlan = (meal: Meal) => {
@@ -76,7 +131,13 @@ export default function DietPlanner() {
 
         <div className="mt-8 grid items-start gap-8 lg:grid-cols-[1fr_1.2fr]">
           <Reveal>
-            <DayPlanCard plan={plan} onShuffle={shuffleMeal} onRegenerate={() => selectGoal(goal)} />
+            <DayPlanCard
+              plan={plan}
+              onShuffle={shuffleMeal}
+              onRegenerate={() => selectGoal(goal)}
+              isRefreshing={isRefreshing}
+              apiError={apiError}
+            />
           </Reveal>
 
           <Reveal delay={120}>
