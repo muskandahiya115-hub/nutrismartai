@@ -1,0 +1,27 @@
+# Render settings for the NutriSmart AI API.
+# In the Render dashboard, point the service at the "server" folder
+# (Root Directory: server) and use these values:
+#
+#   Build Command:  npm install
+#   Start Command:  npm start
+#
+# Render sets PORT automatically; the app reads it from the environment.
+
+services:
+  - type: web
+    name: nutrismart-ai-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: CORS_ORIGIN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
